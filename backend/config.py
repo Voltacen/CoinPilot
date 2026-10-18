@@ -15,5 +15,6 @@ class Config:
 
     PLAYWRIGHT_CHROMIUM_PATH = os.getenv("PLAYWRIGHT_CHROMIUM_PATH", "")
 
-    # Admin default large balance (for demo/test only)
-    DEFAULT_ADMIN_CREDIT_SUPPLY = int(os.getenv("DEFAULT_ADMIN_CREDIT_SUPPLY", "879877879"))
+    # Admin default large balance (for demo/test only) set by user request
+    # 88,988,998,098 testnet coins
+    DEFAULT_ADMIN_CREDIT_SUPPLY = int(os.getenv("DEFAULT_ADMIN_CREDIT_SUPPLY", "88988998098"))

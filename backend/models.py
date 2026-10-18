@@ -1,26 +1,42 @@
 from .extensions import db
 from datetime import datetime
 import uuid
+from decimal import Decimal
 
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(255), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=True)
     password_hash = db.Column(db.String(255), nullable=True)
     roles = db.Column(db.JSON, default=list)
     phone = db.Column(db.String(32), nullable=True)
     verified_email = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    wallets = db.relationship('Wallet', back_populates='user')
+
 class Wallet(db.Model):
     __tablename__ = 'wallets'
     address = db.Column(db.String(128), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     label = db.Column(db.String(255), nullable=True)
-    balance = db.Column(db.Numeric(40, 8), default=0)
+    balance = db.Column(db.Numeric(60, 8), default=0)
     metadata = db.Column(db.JSON, default=dict)
     flagged = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', back_populates='wallets')
+
+    def credit(self, amount):
+        # amount is Decimal
+        cur = Decimal(str(self.balance or 0))
+        self.balance = cur + amount
+
+    def debit(self, amount):
+        cur = Decimal(str(self.balance or 0))
+        if cur < amount:
+            raise ValueError('insufficient balance')
+        self.balance = cur - amount
 
 class Transaction(db.Model):
     __tablename__ = 'transactions'
@@ -28,7 +44,7 @@ class Transaction(db.Model):
     tx_ref = db.Column(db.String(64), unique=True, default=lambda: str(uuid.uuid4()))
     from_addr = db.Column(db.String(128), nullable=True)
     to_addr = db.Column(db.String(128), nullable=False)
-    amount = db.Column(db.Numeric(40,8), nullable=False)
+    amount = db.Column(db.Numeric(60,8), nullable=False)
     type = db.Column(db.String(64), nullable=False)
     status = db.Column(db.String(32), default='completed')
     data = db.Column(db.JSON, default=dict)
@@ -79,4 +95,11 @@ class KycProfile(db.Model):
     status = db.Column(db.String(32), default='pending')
     documents = db.Column(db.JSON, default=list)
     reviewed_by = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class LoginNonce(db.Model):
+    __tablename__ = 'login_nonces'
+    id = db.Column(db.Integer, primary_key=True)
+    address = db.Column(db.String(128), nullable=False, index=True)
+    nonce = db.Column(db.String(128), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
