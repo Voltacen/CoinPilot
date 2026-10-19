@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login — CoinPilot{% endblock %}
+
+{% block content %}
+<div style="max-width: 440px; margin: 3rem auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2 style="font-size: 1.25rem; font-weight: 700;">Account Authentication</h2>
+            <span class="badge badge-internal">Secured</span>
+        </div>
+        <form method="POST" action="{{ url_for('auth_views.login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" class="form-control" placeholder="name@domain.internal" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="••••••••••••" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Authenticate</button>
+        </form>
+        <div style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+            Don't have an account? <a href="{{ url_for('auth_views.register') }}">Create an account</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
