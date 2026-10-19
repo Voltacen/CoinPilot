@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}CoinPilot — EVM Blockchain & Internal Credit System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('dashboard_views.index') }}" class="brand">
+            <span class="logo-badge">CP</span>
+            <span>CoinPilot</span>
+        </a>
+        <ul class="nav-links">
+            {% if current_user.is_authenticated %}
+                <li><a href="{{ url_for('dashboard_views.index') }}">Dashboard</a></li>
+                {% if current_user.is_admin %}
+                    <li><a href="{{ url_for('admin_views.index') }}" style="color: var(--accent-violet);">Admin Panel</a></li>
+                {% endif %}
+                <li style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--font-mono);">{{ current_user.email }}</li>
+                <li><a href="{{ url_for('auth_views.logout') }}" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Logout</a></li>
+            {% else %}
+                <li><a href="{{ url_for('auth_views.login') }}">Login</a></li>
+                <li><a href="{{ url_for('auth_views.register') }}" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Register</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="alert-container">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'message' else 'info' }}">
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2026 CoinPilot Engine. EVM Testnet and Non-Withdrawable Ledger Partitioning.</p>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

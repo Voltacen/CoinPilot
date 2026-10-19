@@ -1,0 +1,68 @@
+import os
+
+import click
+from decimal import Decimal
+from flask.cli import AppGroup
+
+from app.extensions import db
+from app.models.audit import AuditLog
+from app.models.ledger import CreditLedgerEntry, InternalCreditAccount
+from app.models.user import User
+
+
+bootstrap_cli = AppGroup("bootstrap")
+
+
+@bootstrap_cli.command("init-admin")
+def init_admin():
+    """Idempotently initializes the system admin with the exact requested default balance."""
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@coinpilot.internal").lower()
+    admin_pass = os.getenv("ADMIN_INITIAL_PASSWORD", "SuperSecureCoinPilot2026!")
+    target_balance = Decimal("88988998098")
+
+    admin = User.query.filter_by(email=admin_email).first()
+    if not admin:
+        click.echo(f"Creating administrator account: {admin_email}")
+        admin = User(email=admin_email, is_admin=True, is_active=True)
+        admin.set_password(admin_pass)
+        db.session.add(admin)
+        db.session.flush()
+    else:
+        admin.is_admin = True
+        admin.is_active = True
+        db.session.flush()
+
+    account = InternalCreditAccount.query.filter_by(user_id=admin.id).first()
+    if not account:
+        account = InternalCreditAccount(user_id=admin.id, balance=target_balance)
+        db.session.add(account)
+        db.session.flush()
+
+        ledger_entry = CreditLedgerEntry(
+            source_account_id=None,
+            destination_account_id=account.id,
+            amount=target_balance,
+            entry_type="INITIAL_ALLOCATION",
+            idempotency_key=f"init_admin_alloc_{admin.id}",
+            reference_note="System Genesis Admin Balance Allocation: 88,988,998,098",
+        )
+        db.session.add(ledger_entry)
+        db.session.add(AuditLog(
+            user_id=admin.id,
+            action="BOOTSTRAP_ALLOCATION",
+            target_entity=f"Account:{account.id}",
+            details=f"Idempotent initialization of required balance: {target_balance}",
+        ))
+        db.session.commit()
+        click.echo(f"Admin initialized successfully with balance: {target_balance}")
+    else:
+        if account.balance != target_balance:
+            account.balance = target_balance
+            db.session.add(AuditLog(
+                user_id=admin.id,
+                action="BALANCE_SYNC",
+                target_entity=f"Account:{account.id}",
+                details=f"Ensured default admin balance of {target_balance}.",
+            ))
+        db.session.commit()
+        click.echo("Admin credit account already exists. Balance synchronized to the required default.")

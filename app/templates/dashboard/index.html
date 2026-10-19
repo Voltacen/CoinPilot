@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CoinPilot{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 1rem; flex-wrap: wrap;">
+    <div>
+        <h1 style="font-size: 1.75rem; font-weight: 800;">Account Overview</h1>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Internal ledger balance & EVM testnet activity</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <a href="{{ url_for('dashboard_views.export_ledger_csv') }}" class="btn btn-secondary">Export Ledger CSV</a>
+        <button id="open-transfer-modal" class="btn btn-primary"><span>&uarr;</span> Initiate Transfer</button>
+    </div>
+</div>
+
+<div class="alert alert-warning" style="margin-bottom: 1.5rem;">
+    <div>
+        <strong>Non-withdrawable account:</strong> CoinPilot credits are platform ledger balances only. They are visible to the recipient and can be sent to real-world EVM addresses for testnet settlement, but they cannot be withdrawn.
+    </div>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Internal System Credits</span>
+            <span class="badge badge-internal">Non-Withdrawable</span>
+        </div>
+        <div class="metric-value">
+            {{ "{:,.4f}".format(credit_account.balance) if credit_account else "0.0000" }} <span style="font-size: 1rem; color: var(--accent-violet);">PTS</span>
+        </div>
+        <div class="metric-subtext">Restricted platform internal credits for system-bound accounting only.</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Sepolia Testnet Balance</span>
+            <span class="badge badge-testnet">Chain ID: 11155111</span>
+        </div>
+        <div class="metric-value">
+            {{ "{:,.6f}".format(onchain_balance) }} <span style="font-size: 1rem; color: var(--accent-cyan);">SepoliaETH</span>
+        </div>
+        <div class="metric-subtext">Live testnet balance verified on-chain via Web3 JSON-RPC.</div>
+    </div>
+</div>
+
+<div class="grid-2" style="margin-top: 1rem;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Security & Ledger Notifications</span>
+        </div>
+        <div id="notification-list">
+            {% if notifications %}
+                {% for n in notifications %}
+                    <div class="alert {{ 'alert-danger' if n.category == 'DANGER' else 'alert-success' if n.category == 'SUCCESS' else 'alert-info' }}" style="margin-bottom: 0.5rem; padding: 0.75rem 1rem;">
+                        <div>
+                            <div style="font-weight: 600;">{{ n.title }}</div>
+                            <div style="font-size: 0.825rem;">{{ n.message }}</div>
+                        </div>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">{{ n.created_at.strftime('%H:%M:%S') }}</span>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: var(--text-muted); font-size: 0.875rem;">No active notifications recorded.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Internal Credit History</span>
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Ref Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if ledger_entries %}
+                        {% for entry in ledger_entries %}
+                            <tr>
+                                <td class="font-mono" style="font-size: 0.75rem;">{{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td><span class="badge badge-internal">{{ entry.entry_type }}</span></td>
+                                <td class="font-mono">{{ "{:,.4f}".format(entry.amount) }}</td>
+                                <td style="font-size: 0.8rem; color: var(--text-secondary);">{{ entry.reference_note or '-' }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-muted);">No internal credit entries found.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <span class="card-title">Verified On-Chain EVM Transactions</span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Created At</th>
+                    <th>Network</th>
+                    <th>Recipient</th>
+                    <th>Amount</th>
+                    <th>Tx Hash</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if blockchain_transactions %}
+                    {% for tx in blockchain_transactions %}
+                        <tr>
+                            <td class="font-mono" style="font-size: 0.75rem;">{{ tx.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td><span class="badge badge-testnet">{{ "Sepolia" if tx.chain_id == 11155111 else "Base Sepolia" }}</span></td>
+                            <td class="font-mono" style="font-size: 0.8rem;">{{ tx.recipient_address[:8] }}...{{ tx.recipient_address[-6:] }}</td>
+                            <td class="font-mono">{{ "{:,.6f}".format(tx.amount_in_units) }} {{ tx.token_symbol }}</td>
+                            <td class="font-mono" style="font-size: 0.8rem;">
+                                {% if tx.tx_hash %}
+                                    <a href="https://sepolia.etherscan.io/tx/{{ tx.tx_hash }}" target="_blank" rel="noopener noreferrer">
+                                        {{ tx.tx_hash[:10] }}...
+                                    </a>
+                                {% else %}
+                                    <span style="color: var(--text-muted);">Unbroadcast</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {{ 'badge-success' if tx.status == 'Successful' else 'badge-pending' if tx.status in ['Submitted', 'Confirming'] else 'badge-failed' }}">
+                                    {{ tx.status }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No blockchain transfers initiated.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="transfer-modal" class="modal-backdrop hidden">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 style="font-size: 1.15rem; font-weight: 700;">Initiate Asset Transfer</h3>
+            <button id="close-transfer-modal" class="close-btn">&times;</button>
+        </div>
+        <form id="transfer-form">
+            <div class="modal-body">
+                <div id="modal-error-alert" class="alert alert-danger" style="display: none; margin-bottom: 1rem;"></div>
+                <div id="modal-success-alert" class="alert alert-success" style="display: none; margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label for="transfer-type">Select Transfer Asset Class</label>
+                    <select id="transfer-type" class="form-control">
+                        <option value="INTERNAL_CREDIT">Internal Platform Credits (Non-Withdrawable)</option>
+                        <option value="BLOCKCHAIN_TESTNET">EVM Blockchain Testnet Transfer</option>
+                    </select>
+                </div>
+
+                <div id="chain-select-group" class="form-group" style="display: none;">
+                    <label for="chain-select">Target Blockchain Testnet</label>
+                    <select id="chain-select" class="form-control">
+                        <option value="11155111">Ethereum Sepolia (Chain ID 11155111)</option>
+                        <option value="84532">Base Sepolia (Chain ID 84532)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label id="recipient-label" for="recipient-input">Recipient User Email</label>
+                    <input type="text" id="recipient-input" class="form-control" placeholder="user@coinpilot.internal" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="amount-input">Transfer Amount</label>
+                    <input type="number" step="any" min="0.000001" id="amount-input" class="form-control" placeholder="0.00" required>
+                </div>
+
+                <div class="callout callout-warning">
+                    <strong>Notice:</strong> Internal credits cannot be withdrawn to external blockchain wallets. Testnet transfers use genuine testnet nodes and require hot wallet funding.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-transfer-modal" class="btn btn-secondary">Cancel</button>
+                <button type="submit" id="submit-transfer-btn" class="btn btn-primary">Execute Transfer</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/send_modal.js') }}"></script>
+{% endblock %}

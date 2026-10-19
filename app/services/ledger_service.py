@@ -1,24 +1,24 @@
 import uuid
 from decimal import Decimal
+
 from app.extensions import db
-from app.models.ledger import InternalCreditAccount, CreditLedgerEntry
 from app.models.audit import AuditLog, Notification
+from app.models.ledger import CreditLedgerEntry, InternalCreditAccount
+
 
 class LedgerService:
     @staticmethod
     def transfer_internal_credit(sender_user_id: str, recipient_email: str, amount: Decimal, idempotency_key: str):
         if amount <= Decimal("0"):
             raise ValueError("Transfer amount must be strictly positive.")
-
-        # Check idempotency
         if CreditLedgerEntry.query.filter_by(idempotency_key=idempotency_key).first():
             raise ValueError("Duplicate request: Idempotency key already executed.")
 
         from app.models.user import User
+
         recipient = User.query.filter_by(email=recipient_email).first()
         if not recipient:
             raise ValueError(f"Recipient {recipient_email} not found.")
-
         if sender_user_id == recipient.id:
             raise ValueError("Sender and recipient cannot be identical.")
 
@@ -42,18 +42,15 @@ class LedgerService:
             amount=amount,
             entry_type="TRANSFER",
             idempotency_key=idempotency_key,
-            reference_note=f"Peer transfer to {recipient_email}"
+            reference_note=f"Peer transfer to {recipient_email}",
         )
         db.session.add(entry)
-
-        # Notify recipient
         db.session.add(Notification(
             user_id=recipient.id,
             title="Internal Credits Received",
             message=f"You received {amount:,.4f} platform credits from an internal transfer.",
-            category="SUCCESS"
+            category="SUCCESS",
         ))
-
         db.session.commit()
         return entry
 
@@ -77,15 +74,23 @@ class LedgerService:
             amount=abs(amount),
             entry_type="ADMIN_ADJUSTMENT",
             idempotency_key=idempotency_key,
-            reference_note=note
+            reference_note=note,
         )
         db.session.add(entry)
-
         db.session.add(AuditLog(
             user_id=operator_user_id,
             action="CREDIT_ADJUSTMENT",
             target_entity=f"Account:{target_account.id}",
-            details=f"Adjusted balance by {amount}. Note: {note}"
+            details=f"Adjusted balance by {amount}. Note: {note}",
         ))
-
         db.session.commit()
+
+    @staticmethod
+    def get_ledger_history_for_user(user_id: str, limit: int = 25):
+        account = InternalCreditAccount.query.filter_by(user_id=user_id).first()
+        if not account:
+            return []
+        return CreditLedgerEntry.query.filter(
+            (CreditLedgerEntry.source_account_id == account.id) |
+            (CreditLedgerEntry.destination_account_id == account.id)
+        ).order_by(CreditLedgerEntry.created_at.desc()).limit(limit).all()

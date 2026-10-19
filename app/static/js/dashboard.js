@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-    // Poll notifications every 30 seconds
     const notificationContainer = document.getElementById("notification-list");
-    
+
     async function refreshNotifications() {
         if (!notificationContainer) return;
         try {
